@@ -258,6 +258,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_wallTile: {fileID: 11400000, guid: d24448af6687d9b4ab86f1ad8e80f7ac, type: 2}
+  m_wallRTile: {fileID: 11400000, guid: a820b5ea61e26284ba23f0fda0b67fc0, type: 2}
+  m_wallDTile: {fileID: 11400000, guid: 2b24eeda9c73c3c45ad8ccf77823d820, type: 2}
   m_exitTile: {fileID: 11400000, guid: 798f5036c25c6ac45850d48842ca3359, type: 2}
 --- !u!1 &1207665754
 GameObject:
