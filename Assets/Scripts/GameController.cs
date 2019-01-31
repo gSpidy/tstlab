@@ -22,16 +22,16 @@ public class GameController : MonoBehaviour
 
 		GameUI.DisplayLevel.Value = LevelNum;
 		
-		Level.Instance.Generate(LevelNum,false);
+		Level.Instance.Generate(LevelNum,true);
 		Level.Instance.RenderField();
-
-		var availableCells = Level.Instance.FreeCells;
 
 		// ReSharper disable once PossibleLossOfFraction
 		var player = m_playerPrefab.InstantiateMe(Level.FIELD_SIZE / 2 * Vector2.one, Quaternion.identity);
 		CameraFollow.Instance.target = player.transform;
 
-		var progressObs = CollectProgressObs(SpawnCollectables(availableCells),player.LevelPosition);
+		var progressObs = CollectProgressObs(SpawnCollectables(Level.CellsEnumerable),
+			player.LevelPosition
+				.Select(p=>new Vector2Int(p.x,Level.FIELD_SIZE-1-p.y)));
 
 		progressObs
 			.StartWith(0)
@@ -45,10 +45,14 @@ public class GameController : MonoBehaviour
 			.Last();
 
 		//lose condition
-		var losec = SpawnBots(availableCells)
+		var losec = SpawnBots(Level.CellsEnumerable)
 			.Select(x => x.LevelPosition) //observe all enemies positions
 			.Merge()
-			.CombineLatest(player.LevelPosition.Skip(1), (enpos, plpos) => (enpos-plpos).sqrMagnitude<=1) //true if any anemy position == player position
+			.CombineLatest(player.LevelPosition.Skip(1), (enpos, plpos) =>
+			{
+				var dir = plpos-enpos;
+				return dir.sqrMagnitude <= 1 && Level.Instance.CanStep(enpos, dir);
+			})
 			.First(x=>x);
 		
 		//finish game once
@@ -116,7 +120,7 @@ public class GameController : MonoBehaviour
 			.Select(x =>
 			{
 				occupied.Add(x);
-				return m_collectablePrefab.InstantiateMe((Vector2) x, Quaternion.identity);
+				return m_collectablePrefab.InstantiateMe(new Vector2(x.x,Level.FIELD_SIZE-1-x.y), Quaternion.identity);
 			})
 			.ToList();
 	}

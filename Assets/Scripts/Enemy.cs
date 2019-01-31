@@ -48,7 +48,7 @@ public class Enemy : BaseCharacter
 					.Select(_ => tgt?
 						Level.Instance.PathStepDir(LevelPosition.Value, tgt.LevelPosition.Value)
 						:Wander())
-					.SelectMany(dir => Move(dir))
+					.SelectMany(dir => Move(Vector2.Reflect(dir,Vector2.up)))
 					.Repeat();
 			})
 			.Switch()

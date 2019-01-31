@@ -9,7 +9,7 @@ public class Player : BaseCharacter
 			.First(x => x != Vector2.zero)
 			.SelectMany(dir=>
 			{
-				transform.up = (Vector2)NormalizeDirection(dir);
+				transform.up = NormalizeDirection(dir);
 				return Move(dir);
 			})
 			.Repeat()

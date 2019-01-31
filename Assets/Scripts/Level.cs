@@ -9,29 +9,14 @@ using Random = UnityEngine.Random;
 
 public class Level : MonoBehaviourSingleton<Level>
 {
-    [SerializeField] private Tile m_wallTile,m_exitTile;
+    [SerializeField] private Tile m_wallTile,m_wallRTile,m_wallDTile,m_exitTile;
 
     private Tilemap _tmap;
     private Tilemap Tilemap => _tmap ?? (_tmap = GetComponentInChildren<Tilemap>());
 
     public const int FIELD_SIZE = 15;
-    bool[,] field = new bool[FIELD_SIZE + 1, FIELD_SIZE + 1];
 
-    /// <summary>
-    /// true if cell is wall
-    /// </summary>
-    /// <param name="i"></param>
-    /// <param name="j"></param>
-    public bool this[int i, int j]
-    {
-        get
-        {
-            if (i < 0 || i > FIELD_SIZE ||
-                j < 0 || j > FIELD_SIZE) return true;
-
-            return field[i, j];
-        }
-    }
+    private Cell[,] cells = new Cell[FIELD_SIZE, FIELD_SIZE];
 
     private Vector2? _wmin;
     public Vector2 WorldMinimum => (_wmin ?? (_wmin = Vector2.one * -1.5f)).Value;
@@ -45,17 +30,14 @@ public class Level : MonoBehaviourSingleton<Level>
         public int group;
     }
 
-    public Vector2Int[] FreeCells
+    public static IEnumerable<Vector2Int> CellsEnumerable
     {
         get
         {
-            return Enumerable.Range(0, FIELD_SIZE + 1)
-                .SelectMany(i => Enumerable.Range(0, FIELD_SIZE + 1)
-                    .Select(j => Tuple.Create(j, field[i, j]))
-                    .Where(x => !x.Item2)
-                    .Select(x => new Vector2Int(i, x.Item1))
-                )
-                .ToArray();
+            return Enumerable.Range(0, FIELD_SIZE)
+                .SelectMany(i => Enumerable.Range(0, FIELD_SIZE)
+                    .Select(j => new Vector2Int(i, j))
+                );
         }
     }
     
@@ -71,45 +53,44 @@ public class Level : MonoBehaviourSingleton<Level>
         var oldRandomState = Random.state;
         Random.InitState(levelNum*1000);
         
-        var stripeSz = (FIELD_SIZE + 1) / 2;
-        var stripe = new Cell[stripeSz];
+        var stripe = new Cell[FIELD_SIZE];
         var lastGroup = 0;
 
         var s = "LAB:\n";
 
-        for (int j = 0; j < stripeSz; j++)
+        for (int j = 0; j < FIELD_SIZE; j++)
         {
             //запихиваем ячейки без групп в новые группы
-            for (int i = 0; i < stripeSz; i++)
+            for (int i = 0; i < FIELD_SIZE; i++)
             {
                 if (stripe[i].group < 1)
                     stripe[i].group = ++lastGroup;
             }
 
             //правые границы
-            for (int i = 0; i < stripeSz - 1; i++)
+            for (int i = 0; i < FIELD_SIZE - 1; i++)
             {
                 if (stripe[i + 1].group == stripe[i].group || Random.value < .5f)
                     stripe[i].rBorder = true;
                 else
                 {
                     var mergeGroup = stripe[i + 1].group;
-                    for (var k = 0; k < stripeSz; k++)
+                    for (var k = 0; k < FIELD_SIZE; k++)
                         if (stripe[k].group == mergeGroup)
                             stripe[k].group = stripe[i].group;
                 }
             }
 
-            stripe[stripeSz - 1].rBorder = true;
+            stripe[FIELD_SIZE - 1].rBorder = true;
 
             //нижние границы
             var openings = 0;
-            for (int i = 0; i < stripeSz; i++)
+            for (int i = 0; i < FIELD_SIZE; i++)
             {
                 stripe[i].dBorder = Random.value < .5f;
                 if (!stripe[i].dBorder) openings++;
 
-                if (i == stripeSz - 1 || stripe[i + 1].group != stripe[i].group)
+                if (i == FIELD_SIZE - 1 || stripe[i + 1].group != stripe[i].group)
                 {
                     if (openings < 1)
                         stripe[i].dBorder = false;
@@ -119,32 +100,33 @@ public class Level : MonoBehaviourSingleton<Level>
             }
 
             //ластецкая строка
-            if (j == stripeSz - 1)
-                for (int i = 0; i < stripeSz; i++)
+            if (j == FIELD_SIZE - 1)
+                for (int i = 0; i < FIELD_SIZE; i++)
                 {
                     stripe[i].dBorder = true;
 
-                    if (i < stripeSz - 1 && stripe[i].group != stripe[i + 1].group)
+                    if (i < FIELD_SIZE - 1 && stripe[i].group != stripe[i + 1].group)
                         stripe[i].rBorder = false;
                 }
-
+            
             //заполняем поле (лабиринт с толстыми стенками)
-            for (int i = 0; i < stripeSz; i++)
+            for (int i = 0; i < FIELD_SIZE; i++)
             {
-                var x = i * 2;
-                var y = j * 2;
+                cells[i, j] = stripe[i];
 
-                field[x, y] = false;
-                field[x + 1, y] = i==stripeSz-1 || stripe[i].rBorder && (!breakSomeWalls || Random.value<.75f);
-                field[x, y + 1] = j==stripeSz-1 || stripe[i].dBorder && (!breakSomeWalls || Random.value<.75f);
-                field[x + 1, y + 1] = true;
-
-                if (i > 0)
-                    field[x - 1, y + 1] |= stripe[i].dBorder;
+                if (breakSomeWalls)
+                {
+                    cells[i, j].rBorder &= Random.value < .9f;
+                    cells[i, j].dBorder &= Random.value < .9f;
+                }
+                
+                cells[i, j].rBorder |= i==FIELD_SIZE-1;
+                cells[i, j].dBorder |= j==FIELD_SIZE-1;
             }
+            
 
             //debug lab map
-            for (int i = 0; i < stripeSz; i++)
+            for (int i = 0; i < FIELD_SIZE; i++)
             {
                 var d = stripe[i].dBorder;
                 var r = stripe[i].rBorder;
@@ -153,7 +135,7 @@ public class Level : MonoBehaviourSingleton<Level>
             }
             s += "\n";
 
-            for (int i = 0; i < stripeSz; i++)
+            for (int i = 0; i < FIELD_SIZE; i++)
             {
                 stripe[i].rBorder = false;
                 if (stripe[i].dBorder)
@@ -162,32 +144,44 @@ public class Level : MonoBehaviourSingleton<Level>
             }
         }
         
-        var middle = FIELD_SIZE / 2;
-        for (int i = middle-1; i <= middle+1; i++)
-            for (int j = middle - 1; j <= middle + 1; j++)
-            {
-                field[i, j] = false;
-            }
-
         Vector2Int exit = new Vector2Int();
-        do
-        {
-            exit.x = Random.Range(0, FIELD_SIZE + 1);
-            exit.y = Random.Range(0, FIELD_SIZE + 1);
+        
+        exit.x = Random.Range(0, FIELD_SIZE);
+        exit.y = Random.Range(0, FIELD_SIZE);
 
-            var isMin = Random.value < .5f;
+        var isMin = Random.value < .5f;
 
-            if (Random.value < .5f)
-                exit.x = isMin ? 0 : FIELD_SIZE;
-            else
-                exit.y = isMin ? 0 : FIELD_SIZE;
-
-        } while (field[exit.x, exit.y]);
+        if (Random.value < .5f)
+            exit.x = isMin ? 0 : FIELD_SIZE-1;
+        else
+            exit.y = isMin ? 0 : FIELD_SIZE-1;
+        
         ExitPosition = exit;
 
         Random.state = oldRandomState;
 
         Debug.Log(s);
+    }
+
+    public bool CanStep(Vector2Int current, Vector2Int direction)
+    {
+        if (direction == Vector2Int.zero) return true;
+        if (direction.x!=0 && direction.y!=0) return false;
+        
+        var p = current + direction;
+        
+        if (p.x < 0 || p.y < 0 || p.x >= FIELD_SIZE || p.y >= FIELD_SIZE) return false;
+
+        if (p.y == current.y)
+        {
+            return !(p.x>current.x? 
+                cells[current.x,current.y].rBorder:
+                cells[p.x,p.y].rBorder);
+        }
+
+        return !(p.y>current.y? 
+            cells[current.x,current.y].dBorder:
+            cells[p.x,p.y].dBorder);
     }
 
     private List<Vector2Int> AStarPath(Vector2Int origin, Vector2Int destination)
@@ -215,9 +209,8 @@ public class Level : MonoBehaviourSingleton<Level>
                     Vector2Int.down,
                     Vector2Int.up,
                 }
+                .Where(dir =>CanStep(current,dir))
                 .Select(x=>current+x)
-                .Where(x => x.x >= 0 && x.y >= 0 && x.x <= FIELD_SIZE && x.y <= FIELD_SIZE)
-                .Where(x => !field[x.x, x.y])
                 .OrderBy(x => (destination - x).sqrMagnitude)
                 .ForEach(next =>
                 {
@@ -261,19 +254,21 @@ public class Level : MonoBehaviourSingleton<Level>
     {
         Tilemap.ClearAllTiles();
 
-        for (int i = 0; i <= FIELD_SIZE; i++)
+        for (int i = 0; i < FIELD_SIZE; i++)
         {
-            for (int j = 0; j <= FIELD_SIZE; j++)
+            for (int j = 0; j < FIELD_SIZE; j++)
             {
-                if (!field[i, j]) continue;
-                Tilemap.SetTile(new Vector3Int(i, j, 0), m_wallTile);
+                if(cells[i,j].rBorder)
+                    Tilemap.SetTile(new Vector3Int(i, FIELD_SIZE-1-j, 1), m_wallRTile);
+                
+                if(cells[i,j].dBorder)
+                    Tilemap.SetTile(new Vector3Int(i, FIELD_SIZE-1-j, 2), m_wallDTile);
             }
 
-            Tilemap.SetTile(new Vector3Int(i, -1, 0), m_wallTile);
-            Tilemap.SetTile(new Vector3Int(-1, i, 0), m_wallTile);
+            Tilemap.SetTile(new Vector3Int(i, FIELD_SIZE, 0), m_wallDTile);
+            Tilemap.SetTile(new Vector3Int(-1, i, 0), m_wallRTile);
         }
         
-        Tilemap.SetTile(new Vector3Int(-1, -1, 0), m_wallTile);
-        Tilemap.SetTile(new Vector3Int(ExitPosition.x,ExitPosition.y,0), m_exitTile);
+        Tilemap.SetTile(new Vector3Int(ExitPosition.x,FIELD_SIZE-1-ExitPosition.y,0), m_exitTile);
     }
 }

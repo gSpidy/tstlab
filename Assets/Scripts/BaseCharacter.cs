@@ -16,29 +16,29 @@ public abstract class BaseCharacter : MonoBehaviour
 	public float TimeToCrossCell => 1f / m_moveSpeed;
 	public ReactiveProperty<Vector2Int> LevelPosition { get; } = new ReactiveProperty<Vector2Int>(Vector2Int.zero);
 
-	protected Vector2Int NormalizeDirection(Vector2 direction)
+	protected Vector2 NormalizeDirection(Vector2 direction)
 	{
 		var x = Vector3.Project(direction, Vector3.right);
 		var y = Vector3.Project(direction, Vector3.up);
 
-		Vector2 newDir = x.sqrMagnitude > y.sqrMagnitude ? x.normalized : y.normalized;
-		
-		return Vector2Int.FloorToInt(newDir);
+		return x.sqrMagnitude > y.sqrMagnitude ? x.normalized : y.normalized;
 	}
 	
 	protected IObservable<Unit> Move(Vector2 direction)
 	{
 		if (direction.magnitude < .1f) return Observable.NextFrame();
+
+		var normalDir = NormalizeDirection(direction);
+		var intDir = Vector2Int.FloorToInt(Vector2.Reflect(normalDir,Vector2.up));
+
+		var intDest = LevelPosition.Value + intDir;
 		
-		var intDir = Vector2Int.FloorToInt(NormalizeDirection(direction));
-		
-		var dest = LevelPosition.Value + intDir;
-		if (Level.Instance[dest.x, dest.y]) return Observable.NextFrame();
+		if(!Level.Instance.CanStep(LevelPosition.Value,intDir)) return Observable.NextFrame();
 		
 		return Observable.ReturnUnit()
 			.Do(_ =>
 			{
-				transform.DOMove((Vector2)(LevelPosition.Value+intDir), TimeToCrossCell);
+				transform.DOMove(new Vector2(intDest.x,Level.FIELD_SIZE - 1 - intDest.y), TimeToCrossCell);
 				
 				var quarterTime = TimeToCrossCell / 4;
 
@@ -67,7 +67,7 @@ public abstract class BaseCharacter : MonoBehaviour
 
 	public void SyncLevelPosition()
 	{
-		LevelPosition.Value = Vector2Int.FloorToInt(transform.position);
+		LevelPosition.Value = Vector2Int.FloorToInt(new Vector2(transform.position.x,Level.FIELD_SIZE-1-transform.position.y));
 	}
 
 	public virtual void ApplyLevelSettings(int lvl){}
